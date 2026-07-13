@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Background circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"/>
+    <!-- Edit icon (pen) -->
+    <path
+        android:fillColor="#FF6C00"
+        android:pathData="M38,68l-2,8l8,-2l20,-20l-6,-6zM62,38l-4,-4l-26,26l4,4zM68,42l-6,-6l4,-4c0.78,-0.78 2.05,-0.78 2.83,0l3.17,3.17c0.78,0.78 0.78,2.05 0,2.83z"/>
+    <!-- Play triangle -->
+    <path
+        android:fillColor="#FF6C00"
+        android:pathData="M54,44l10,6l-10,6z"/>
+</vector>
