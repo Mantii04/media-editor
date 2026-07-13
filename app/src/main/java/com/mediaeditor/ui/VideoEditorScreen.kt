@@ -27,7 +27,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.mediaeditor.editor.VideoProcessor
-import com.mediaeditor.model.EditorMode
 import com.mediaeditor.util.FileUtils
 import kotlinx.coroutines.launch
 import java.io.File
@@ -205,7 +204,7 @@ fun VideoEditorScreen(
                                     try {
                                         val cacheDir = FileUtils.getCacheDir(context)
                                         val outFile = File(cacheDir, "trimmed_${System.currentTimeMillis()}.mp4")
-                                        val result = VideoProcessor.trimVideo(
+                                        val result = VideoProcessor.trim(
                                             context, mediaUri, outFile, trimStart, trimEnd
                                         )
                                         result.onSuccess { uri ->

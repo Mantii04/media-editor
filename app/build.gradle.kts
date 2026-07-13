@@ -86,9 +86,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.0")
     implementation("androidx.media3:media3-ui:1.4.0")
 
-    // FFmpegKit for video processing (trim, merge, speed, audio, GIF)
-    implementation("com.arthenica:ffmpeg-kit-min:6.0")
-
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
