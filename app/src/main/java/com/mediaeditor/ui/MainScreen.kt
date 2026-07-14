@@ -232,15 +232,17 @@ private suspend fun loadMediaItems(context: android.content.Context, limit: Int)
         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
         arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.MIME_TYPE, MediaStore.Images.Media.DATE_ADDED),
-        null, null, "${MediaStore.Images.Media.DATE_ADDED} DESC LIMIT $limit"
+        null, null, "${MediaStore.Images.Media.DATE_ADDED} DESC"
     )?.use { c ->
         val idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
         val nameCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
         val mimeCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.MIME_TYPE)
-        while (c.moveToNext()) {
+        var count = 0
+        while (c.moveToNext() && count < limit) {
             val uri = Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, c.getString(idCol))
             items.add(MediaItem(uri = uri, fileName = c.getString(nameCol),
                 mimeType = c.getString(mimeCol) ?: "image/*"))
+            count++
         }
     }
 
@@ -249,11 +251,12 @@ private suspend fun loadMediaItems(context: android.content.Context, limit: Int)
         MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
         arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME,
             MediaStore.Video.Media.DURATION, MediaStore.Video.Media.DATE_ADDED),
-        null, null, "${MediaStore.Video.Media.DATE_ADDED} DESC LIMIT ${limit/2}"
+        null, null, "${MediaStore.Video.Media.DATE_ADDED} DESC"
     )?.use { c ->
         val idCol = c.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
         val nameCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-        while (c.moveToNext()) {
+        var count = 0
+        while (c.moveToNext() && count < limit / 2) {
             val uri = Uri.withAppendedPath(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, c.getString(idCol))
             items.add(MediaItem(uri = uri, fileName = c.getString(nameCol),
                 mimeType = "video/*", durationMs = c.getLong(2)))
