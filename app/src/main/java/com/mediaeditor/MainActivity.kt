@@ -41,7 +41,7 @@ private fun AppNavigator(sharedUri: Uri?) {
     var currentMediaUri by remember { mutableStateOf<Uri?>(sharedUri) }
 
     if (sharedUri != null && currentMode == EditorMode.HOME) {
-        val mimeType = contentResolver?.getType(sharedUri) ?: ""
+        val mimeType = contentResolver()?.getType(sharedUri) ?: ""
         currentMode = if (mimeType.startsWith("video/")) EditorMode.VIDEO_EDITOR
                       else EditorMode.PHOTO_EDITOR
     }
@@ -84,8 +84,7 @@ private fun AppNavigator(sharedUri: Uri?) {
 
 // Needed for contentResolver access in composable
 @Composable
-private val contentResolver: android.content.ContentResolver?
-    get() {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        return context.contentResolver
-    }
+private fun contentResolver(): android.content.ContentResolver? {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return context.contentResolver
+}

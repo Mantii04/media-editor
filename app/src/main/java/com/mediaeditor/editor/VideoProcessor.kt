@@ -1,6 +1,7 @@
 package com.mediaeditor.editor
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.*
 import android.net.Uri
 import com.mediaeditor.util.FileUtils

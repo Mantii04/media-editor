@@ -235,9 +235,9 @@ object PhotoEditEngine {
             canvas.save()
             canvas.rotate(rotation, x * bitmap.width, y * bitmap.height)
             canvas.drawRect(
-                x * bitmap.width - 16.dp,
+                x * bitmap.width - 16f.dp,
                 y * bitmap.height - scaledSize * 0.7f,
-                x * bitmap.width + text.length * scaledSize * 0.6f + 16.dp,
+                x * bitmap.width + text.length * scaledSize * 0.6f + 16f.dp,
                 y * bitmap.height + scaledSize * 0.3f,
                 bgPaint
             )
@@ -287,7 +287,7 @@ object PhotoEditEngine {
         val canvas = Canvas(result)
 
         val stickerW = (bitmap.width * scale).roundToInt()
-        val stickerH = (stickerW * sticker.height / sticker.width).roundToInt()
+        val stickerH = (stickerW * sticker.height.toFloat() / sticker.width).roundToInt()
         val scaledSticker = Bitmap.createScaledBitmap(sticker, stickerW, stickerH, true)
 
         canvas.drawBitmap(scaledSticker,

@@ -237,8 +237,9 @@ fun VideoEditorScreen(
             ) {
                 AndroidView(
                     factory = { ctx ->
+                        val exoPlayer = player
                         PlayerView(ctx).apply {
-                            player = this@apply.player
+                            player = exoPlayer
                             useController = true
                             setShowNextButton(false)
                             setShowPreviousButton(false)
