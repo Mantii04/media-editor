@@ -2,10 +2,10 @@ package com.mediaeditor.editor
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.MediaExtractor
-import android.graphics.MediaFormat
-import android.graphics.MediaMetadataRetriever
-import android.graphics.MediaMuxer
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
+import android.media.MediaMuxer
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.net.Uri

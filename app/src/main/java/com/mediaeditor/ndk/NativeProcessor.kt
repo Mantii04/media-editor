@@ -93,7 +93,7 @@ object NativeProcessor {
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 val gray = (0.299f * r + 0.587f * g + 0.114f * b).toInt().coerceIn(0, 255)
-                0xFF000000 or (gray shl 16) or (gray shl 8) or gray
+                (-0x1000000) or (gray shl 16) or (gray shl 8) or gray
             }
         }
 
@@ -106,7 +106,7 @@ object NativeProcessor {
                 val nr = (r + delta).coerceIn(0, 255)
                 val ng = (g + delta).coerceIn(0, 255)
                 val nb = (b + delta).coerceIn(0, 255)
-                0xFF000000 or (nr shl 16) or (ng shl 8) or nb
+                (-0x1000000) or (nr shl 16) or (ng shl 8) or nb
             }
         }
     }

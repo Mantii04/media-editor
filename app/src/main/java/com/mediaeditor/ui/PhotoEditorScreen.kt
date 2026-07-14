@@ -102,12 +102,15 @@ fun PhotoEditorScreen(
 
         // Filter
         if (selectedFilter != null && selectedFilter!!.name != "Normal") {
-            result = PhotoEditEngine.applyFilter(result, selectedFilter!!)
+            result = PhotoEditEngine.applyColorMatrix(result, selectedFilter!!.matrix)
         }
         // Adjustments
-        if (brightness != 0f) result = PhotoEditEngine.adjustBrightness(result, brightness)
-        if (contrast != 0f) result = PhotoEditEngine.adjustContrast(result, contrast)
-        if (saturation != 1f) result = PhotoEditEngine.adjustSaturation(result, saturation)
+        if (brightness != 0f || contrast != 0f || saturation != 1f || temperature != 0f) {
+            result = PhotoEditEngine.applyAdjustments(result, PhotoEditEngine.EditParams(
+                brightness = brightness, contrast = contrast,
+                saturation = saturation, temperature = temperature
+            ))
+        }
         // Effects
         if (vignette > 0f) result = EffectProcessor.applyVignette(result, vignette)
         if (blur > 0f) result = EffectProcessor.applyBlur(result, blur)

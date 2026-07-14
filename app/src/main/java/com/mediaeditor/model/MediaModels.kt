@@ -1,6 +1,7 @@
 package com.mediaeditor.model
 
 import android.net.Uri
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 
 /** Main project that contains all media and edits */
@@ -20,7 +21,7 @@ data class Project(
 @Serializable
 data class MediaItem(
     val id: Long = System.nanoTime(),
-    val uri: Uri,
+    @Contextual val uri: Uri,
     val fileName: String,
     val mimeType: String,
     val durationMs: Long = 0L,
@@ -131,7 +132,7 @@ enum class TextAlignment { LEFT, CENTER, RIGHT }
 @Serializable
 data class StickerOverlay(
     val id: String = java.util.UUID.randomUUID().toString(),
-    val uri: Uri,
+    @Contextual val uri: Uri,
     val positionX: Float = 0.5f,
     val positionY: Float = 0.5f,
     val scale: Float = 1.0f,

@@ -283,14 +283,14 @@ private fun TrimControls(trimStart: Long, trimEnd: Long, durationMs: Long,
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("In:", fontSize = 11.sp, modifier = Modifier.width(28.dp))
             Text(formatTime(trimStart), fontSize = 11.sp, modifier = Modifier.width(42.dp))
-            Slider(trimStart.toFloat(), { onStartChange(it.toLong()) }, 0f..trimEnd.toFloat(),
-                Modifier.weight(1f).height(20.dp))
+            Slider(value = trimStart.toFloat(), onValueChange = { onStartChange(it.toLong()) },
+                valueRange = 0f..trimEnd.toFloat(), modifier = Modifier.weight(1f).height(20.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Out:", fontSize = 11.sp, modifier = Modifier.width(28.dp))
             Text(formatTime(trimEnd), fontSize = 11.sp, modifier = Modifier.width(42.dp))
-            Slider(trimEnd.toFloat(), { onEndChange(it.toLong()) }, trimStart.toFloat()..durationMs.toFloat(),
-                Modifier.weight(1f).height(20.dp))
+            Slider(value = trimEnd.toFloat(), onValueChange = { onEndChange(it.toLong()) },
+                valueRange = trimStart.toFloat()..durationMs.toFloat(), modifier = Modifier.weight(1f).height(20.dp))
         }
         Button(onClick = onApply, modifier = Modifier.fillMaxWidth(),
             enabled = ! isProcessing && trimEnd > trimStart) {
