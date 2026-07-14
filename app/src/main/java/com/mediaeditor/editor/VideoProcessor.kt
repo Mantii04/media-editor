@@ -2,7 +2,12 @@ package com.mediaeditor.editor
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.media.*
+import android.graphics.MediaExtractor
+import android.graphics.MediaFormat
+import android.graphics.MediaMetadataRetriever
+import android.graphics.MediaMuxer
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.net.Uri
 import com.mediaeditor.util.FileUtils
 import kotlinx.coroutines.Dispatchers
@@ -69,7 +74,6 @@ object VideoProcessor {
 
                 val buffer = ByteBuffer.allocate(512 * 1024)
                 val info = MediaCodec.BufferInfo()
-                var trackSamples = 0L
 
                 while (true) {
                     buffer.clear()
@@ -82,13 +86,11 @@ object VideoProcessor {
                     if (time >= startUs) {
                         info.set(0, size, time - startUs, extractor.sampleFlags)
                         muxer.writeSampleData(muxerIndex, buffer, info)
-                        trackSamples++
+                        sampleCount++
                     }
                     extractor.advance()
                 }
-
                 extractor.unselectTrack(track.index)
-                if (trackSamples > 0) sampleCount += trackSamples
             }
 
             muxer.stop()
@@ -108,6 +110,20 @@ object VideoProcessor {
     /** Cut video at specified point (keep first part) */
     suspend fun cutAt(context: Context, input: Uri, timeMs: Long, output: File): Result<Uri> {
         return trim(context, input, output, 0, timeMs)
+    }
+
+    /** Split video at specified point — returns two parts */
+    suspend fun splitAt(context: Context, input: Uri, timeMs: Long, outputDir: File): Result<Pair<Uri, Uri>> = withContext(Dispatchers.IO) {
+        try {
+            val part1 = File(outputDir, "split1_${System.nanoTime()}.mp4")
+            val part2 = File(outputDir, "split2_${System.nanoTime()}.mp4")
+            val trimmed = trim(context, input, part1, 0, timeMs)
+            if (trimmed.isFailure) return@withContext Result.failure(trimmed.exceptionOrNull()!!)
+            val totalDuration = getInfo(context, input).durationMs
+            val trimmed2 = trim(context, input, part2, timeMs, totalDuration)
+            if (trimmed2.isFailure) return@withContext Result.failure(trimmed2.exceptionOrNull()!!)
+            Result.success(Pair(trimmed.getOrThrow(), trimmed2.getOrThrow()))
+        } catch (e: Exception) { Result.failure(e) }
     }
 
     /** Extract audio track to AAC/MP4 */
@@ -160,11 +176,97 @@ object VideoProcessor {
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    // === Feature not available without FFmpeg ===
-    private fun notAvailable(feature: String): Nothing {
-        throw UnsupportedOperationException(
-            "$feature requires FFmpeg. Install FFmpegKit dependency to enable."
-        )
+    /** Merge multiple videos sequentially */
+    suspend fun merge(context: Context, sources: List<Uri>, output: File): Result<Uri> = withContext(Dispatchers.IO) {
+        if (sources.size < 2) return@withContext Result.failure(Exception("Need at least 2 videos"))
+        try {
+            // Use first video's track format for the muxer
+            val firstPath = copyToCache(context, sources[0])
+            val firstExtractor = createExtractor(firstPath)
+            val tracks = analyzeTracks(firstExtractor)
+            firstExtractor.release()
+
+            val muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxerTracks = mutableListOf<Int>()
+            for (track in tracks) {
+                muxerTracks.add(muxer.addTrack(track.format))
+            }
+            muxer.start()
+
+            var offsetUs = 0L
+            val buffer = ByteBuffer.allocate(1024 * 1024)
+            val info = MediaCodec.BufferInfo()
+
+            for (uri in sources) {
+                val path = copyToCache(context, uri)
+                val extractor = createExtractor(path)
+                val srcTracks = analyzeTracks(extractor)
+
+                for (srcTrack in srcTracks) {
+                    val muxerIdx = muxerTracks.getOrNull(srcTrack.index) ?: continue
+                    extractor.selectTrack(srcTrack.index)
+                    extractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+                    while (true) {
+                        buffer.clear()
+                        val size = extractor.readSampleData(buffer, 0)
+                        if (size < 0) break
+                        info.set(0, size, extractor.sampleTime + offsetUs, extractor.sampleFlags)
+                        muxer.writeSampleData(muxerIdx, buffer, info)
+                        extractor.advance()
+                    }
+                    extractor.unselectTrack(srcTrack.index)
+                }
+
+                offsetUs += extractor.sampleTime
+                extractor.release()
+            }
+
+            muxer.stop()
+            muxer.release()
+            Result.success(Uri.fromFile(output))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** Change video speed (timestamp adjustment - no re-encode) */
+    suspend fun changeSpeed(context: Context, input: Uri, output: File, speed: Float): Result<Uri> = withContext(Dispatchers.IO) {
+        try {
+            val inputPath = copyToCache(context, input)
+            val extractor = createExtractor(inputPath)
+            val tracks = analyzeTracks(extractor)
+
+            val muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxerTracks = mutableMapOf<Int, Int>()
+            for (track in tracks) {
+                muxerTracks[track.index] = muxer.addTrack(track.format)
+            }
+            muxer.start()
+
+            val buffer = ByteBuffer.allocate(512 * 1024)
+            val info = MediaCodec.BufferInfo()
+
+            for (track in tracks) {
+                val muxerIdx = muxerTracks[track.index] ?: continue
+                extractor.selectTrack(track.index)
+                extractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+                while (true) {
+                    buffer.clear()
+                    val size = extractor.readSampleData(buffer, 0)
+                    if (size < 0) break
+                    val adjustedTime = (extractor.sampleTime / speed).toLong()
+                    info.set(0, size, adjustedTime, extractor.sampleFlags)
+                    muxer.writeSampleData(muxerIdx, buffer, info)
+                    extractor.advance()
+                }
+                extractor.unselectTrack(track.index)
+            }
+
+            muxer.stop()
+            muxer.release()
+            extractor.release()
+            Result.success(Uri.fromFile(output))
+        } catch (e: Exception) { Result.failure(e) }
     }
 
     private data class TrackConfig(

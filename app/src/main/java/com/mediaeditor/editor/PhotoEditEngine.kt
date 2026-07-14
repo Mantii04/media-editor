@@ -1,310 +1,253 @@
 package com.mediaeditor.editor
 
+import android.content.Context
 import android.graphics.*
-import com.mediaeditor.model.FilterPreset
-import kotlin.math.*
-import kotlin.math.roundToInt
+import android.net.Uri
+import java.io.File
+import java.io.FileOutputStream
 
 object PhotoEditEngine {
 
-    // === Crop ===
-    fun crop(bitmap: Bitmap, left: Float, top: Float, right: Float, bottom: Float): Bitmap {
-        val x = (left * bitmap.width).roundToInt()
-        val y = (top * bitmap.height).roundToInt()
-        val w = ((right - left) * bitmap.width).roundToInt()
-        val h = ((bottom - top) * bitmap.height).roundToInt()
-        return Bitmap.createBitmap(bitmap,
-            max(0, x), max(0, y),
-            min(w, bitmap.width - x), min(h, bitmap.height - y))
+    data class EditParams(
+        val brightness: Float = 0f,
+        val contrast: Float = 1.0f,
+        val saturation: Float = 1.0f,
+        val exposure: Float = 0f,
+        val highlights: Float = 1.0f,
+        val shadows: Float = 1.0f,
+        val temperature: Float = 0f,
+        val tint: Float = 0f,
+        val vignette: Float = 0f,
+        val grain: Float = 0f,
+        val sharpen: Float = 0f
+    )
+
+    fun loadBitmap(context: Context, uri: Uri): Bitmap? {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val opts = BitmapFactory.Options().apply {
+                inMutable = true
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            BitmapFactory.decodeStream(inputStream, null, opts)
+        } catch (e: Exception) { null }
     }
 
-    fun cropAspectRatio(bitmap: Bitmap, targetW: Int, targetH: Int): Bitmap {
-        val srcW = bitmap.width
-        val srcH = bitmap.height
-        val targetRatio = targetW.toFloat() / targetH
-        val srcRatio = srcW.toFloat() / srcH
+    fun loadBitmapSampled(context: Context, uri: Uri, maxSize: Int = 4096): Bitmap? {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeStream(inputStream, null, opts)
+            val (origW, origH) = opts.outWidth to opts.outHeight
+            var sampleSize = 1
+            while (origW / sampleSize > maxSize || origH / sampleSize > maxSize) sampleSize *= 2
 
-        val (cropW, cropH) = if (srcRatio > targetRatio) {
-            // Source wider - crop width
-            (srcH * targetRatio).roundToInt() to srcH
-        } else {
-            srcW to (srcW / targetRatio).roundToInt()
+            val inputStream2 = context.contentResolver.openInputStream(uri) ?: return null
+            val opts2 = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inMutable = true
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            BitmapFactory.decodeStream(inputStream2, null, opts2)
+        } catch (e: Exception) { null }
+    }
+
+    fun applyColorMatrix(bitmap: Bitmap, matrix: FloatArray): Bitmap {
+        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(result)
+        val paint = Paint().apply {
+            colorFilter = ColorMatrixColorFilter(ColorMatrix(matrix))
+        }
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        return result
+    }
+
+    fun applyAdjustments(bitmap: Bitmap, params: EditParams): Bitmap {
+        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(result)
+
+        // Build combined ColorMatrix
+        val matrix = ColorMatrix()
+
+        // Contrast
+        val contrastMatrix = ColorMatrix(floatArrayOf(
+            params.contrast, 0f, 0f, 0f, 0f,
+            0f, params.contrast, 0f, 0f, 0f,
+            0f, 0f, params.contrast, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f
+        ))
+        matrix.postConcat(contrastMatrix)
+
+        // Brightness via translation
+        val brightnessMatrix = ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, params.brightness,
+            0f, 1f, 0f, 0f, params.brightness,
+            0f, 0f, 1f, 0f, params.brightness,
+            0f, 0f, 0f, 1f, 0f
+        ))
+        matrix.postConcat(brightnessMatrix)
+
+        // Saturation
+        val satMatrix = ColorMatrix()
+        satMatrix.setSaturation(params.saturation)
+        matrix.postConcat(satMatrix)
+
+        // Temperature (warmth) - simple approximation
+        if (params.temperature != 0f) {
+            val tempMatrix = ColorMatrix(floatArrayOf(
+                1f, 0f, 0f, 0f, params.temperature * 8f,
+                0f, 1f, 0f, 0f, params.temperature * 4f,
+                0f, 0f, 1f, 0f, params.temperature * -4f,
+                0f, 0f, 0f, 1f, 0f
+            ))
+            matrix.postConcat(tempMatrix)
         }
 
-        val x = (srcW - cropW) / 2
-        val y = (srcH - cropH) / 2
-        return Bitmap.createBitmap(bitmap, x, y, cropW, cropH)
+        // Tint
+        if (params.tint != 0f) {
+            val tintMatrix = ColorMatrix(floatArrayOf(
+                1f, 0f, 0f, 0f, params.tint * -4f,
+                0f, 1f, 0f, 0f, 0f,
+                0f, 0f, 1f, 0f, params.tint * 8f,
+                0f, 0f, 0f, 1f, 0f
+            ))
+            matrix.postConcat(tintMatrix)
+        }
+
+        canvas.drawBitmap(bitmap, 0f, 0f, Paint().apply {
+            colorFilter = ColorMatrixColorFilter(matrix)
+        })
+
+        // Vignette effect
+        if (params.vignette > 0f) {
+            val w = result.width.toFloat()
+            val h = result.height.toFloat()
+            val cx = w / 2f
+            val cy = h / 2f
+            val radius = Math.sqrt((cx * cx + cy * cy).toDouble()).toFloat() * 0.7f
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = RadialGradient(
+                    cx, cy, radius,
+                    intArrayOf(Color.TRANSPARENT, Color.argb((params.vignette * 180).toInt(), 0, 0, 0)),
+                    floatArrayOf(0.6f, 1.0f),
+                    Shader.TileMode.CLAMP
+                )
+                xfermode = PorterDuff.Mode.DST_IN)
+            }
+            canvas.drawRect(0f, 0f, w, h, paint)
+        }
+
+        return result
     }
 
-    // === Rotate & Flip ===
-    fun rotate(bitmap: Bitmap, degrees: Float): Bitmap {
+    fun cropBitmap(bitmap: Bitmap, left: Float, top: Float, right: Float, bottom: Float): Bitmap {
+        val x = (left * bitmap.width).coerceIn(0f, bitmap.width - 1f).toInt()
+        val y = (top * bitmap.height).coerceIn(0f, bitmap.height - 1f).toInt()
+        val w = ((right - left) * bitmap.width).coerceIn(1f, bitmap.width.toFloat()).toInt()
+        val h = ((bottom - top) * bitmap.height).coerceIn(1f, bitmap.height.toFloat()).toInt()
+        return Bitmap.createBitmap(bitmap, x, y, w.coerceAtMost(bitmap.width - x), h.coerceAtMost(bitmap.height - y))
+    }
+
+    fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
         val matrix = Matrix().apply { postRotate(degrees) }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    fun flip(bitmap: Bitmap, horizontal: Boolean, vertical: Boolean): Bitmap {
+    fun flipBitmap(bitmap: Bitmap, horizontal: Boolean): Bitmap {
         val matrix = Matrix().apply {
-            preScale(if (horizontal) -1f else 1f, if (vertical) -1f else 1f)
+            if (horizontal) preScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
+            else preScale(1f, -1f, bitmap.width / 2f, bitmap.height / 2f)
         }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    // === Resize ===
-    fun resize(bitmap: Bitmap, maxWidth: Int, maxHeight: Int): Bitmap {
-        val scale = min(maxWidth.toFloat() / bitmap.width, maxHeight.toFloat() / bitmap.height)
-        if (scale >= 1f) return bitmap
-        return Bitmap.createScaledBitmap(bitmap,
-            (bitmap.width * scale).roundToInt(),
-            (bitmap.height * scale).roundToInt(), true)
-    }
-
-    fun resizeExact(bitmap: Bitmap, width: Int, height: Int): Bitmap {
-        return Bitmap.createScaledBitmap(bitmap, width, height, true)
-    }
-
-    // === Filters ===
-    fun applyFilter(bitmap: Bitmap, preset: FilterPreset): Bitmap {
+    fun addText(bitmap: Bitmap, text: String, x: Float, y: Float,
+                color: Int, size: Float, rotation: Float = 0f): Bitmap {
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val paint = Paint().apply {
-            colorFilter = ColorMatrixColorFilter(ColorMatrix(preset.matrix))
-        }
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        return result
-    }
-
-    // === Adjustments ===
-    fun adjustBrightness(bitmap: Bitmap, value: Float): Bitmap {
-        val v = value.coerceIn(-1f, 1f) * 255f
-        val matrix = ColorMatrix(floatArrayOf(
-            1f, 0f, 0f, 0f, v,
-            0f, 1f, 0f, 0f, v,
-            0f, 0f, 1f, 0f, v,
-            0f, 0f, 0f, 1f, 0f
-        ))
-        return applyColorMatrix(bitmap, matrix)
-    }
-
-    fun adjustContrast(bitmap: Bitmap, value: Float): Bitmap {
-        val c = 1f + value.coerceIn(-1f, 1f)
-        val t = (1f - c) / 2f * 255f
-        val matrix = ColorMatrix(floatArrayOf(
-            c, 0f, 0f, 0f, t,
-            0f, c, 0f, 0f, t,
-            0f, 0f, c, 0f, t,
-            0f, 0f, 0f, 1f, 0f
-        ))
-        return applyColorMatrix(bitmap, matrix)
-    }
-
-    fun adjustSaturation(bitmap: Bitmap, value: Float): Bitmap {
-        val matrix = ColorMatrix().apply { setSaturation(value.coerceIn(0f, 3f)) }
-        return applyColorMatrix(bitmap, matrix)
-    }
-
-    fun adjustWarmth(bitmap: Bitmap, value: Float): Bitmap {
-        val r = 1f + max(0f, value) * 0.15f
-        val b = 1f + max(0f, -value) * 0.15f
-        val matrix = ColorMatrix(floatArrayOf(
-            r, 0f, 0f, 0f, value * 20f,
-            0f, 1f, 0f, 0f, 0f,
-            0f, 0f, b, 0f, -value * 20f,
-            0f, 0f, 0f, 1f, 0f
-        ))
-        return applyColorMatrix(bitmap, matrix)
-    }
-
-    fun adjustSharpen(bitmap: Bitmap, value: Float): Bitmap {
-        if (value <= 0f) return bitmap
-        val w = bitmap.width
-        val h = bitmap.height
-        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val paint = Paint()
-        val blurRadius = 1f + value * 4f
-
-        paint.setMaskFilter(BlurMaskFilter(blurRadius, BlurMaskFilter.Blur.NORMAL))
-        val blurred = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val blurCanvas = Canvas(blurred)
-        blurCanvas.drawBitmap(bitmap, 0f, 0f, paint)
-
-        val overlay = Paint().apply {
-            alpha = min(255, (value * 80).roundToInt())
-            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
-        }
-        canvas.drawBitmap(bitmap, 0f, 0f, null)
-        canvas.drawBitmap(blurred, 0f, 0f, overlay)
-        blurred.recycle()
-        return result
-    }
-
-    // === Effects ===
-    fun applyVignette(bitmap: Bitmap, strength: Float = 0.5f): Bitmap {
-        val w = bitmap.width
-        val h = bitmap.height
-        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-
-        val centerX = w / 2f
-        val centerY = h / 2f
-        val radius = sqrt(centerX * centerX + centerY * centerY) * 0.7f
-
-        val gradient = RadialGradient(
-            centerX, centerY, radius,
-            Color.TRANSPARENT, Color.BLACK,
-            Shader.TileMode.CLAMP
-        )
-        val paint = Paint().apply {
-            shader = gradient
-            alpha = min(255, (strength * 150).roundToInt())
-        }
-        canvas.drawBitmap(bitmap, 0f, 0f, null)
-        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
-        return result
-    }
-
-    fun applyBlur(bitmap: Bitmap, radius: Float): Bitmap {
-        if (radius <= 0f) return bitmap
-        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val paint = Paint().apply {
-            setMaskFilter(BlurMaskFilter(radius.coerceIn(1f, 25f), BlurMaskFilter.Blur.NORMAL))
-        }
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        return result
-    }
-
-    fun autoEnhance(bitmap: Bitmap): Bitmap {
-        // Auto levels: stretch histogram
-        val w = bitmap.width
-        val h = bitmap.height
-        val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-
-        var minR = 255; var maxR = 0
-        var minG = 255; var maxG = 0
-        var minB = 255; var maxB = 0
-
-        for (pixel in pixels) {
-            minR = min(minR, Color.red(pixel))
-            maxR = max(maxR, Color.red(pixel))
-            minG = min(minG, Color.green(pixel))
-            maxG = max(maxG, Color.green(pixel))
-            minB = min(minB, Color.blue(pixel))
-            maxB = max(maxB, Color.blue(pixel))
-        }
-
-        // Apply auto contrast + saturation boost
-        var result = adjustContrast(bitmap, 0.15f)
-        result = adjustSaturation(result, 1.15f)
-        return result
-    }
-
-    fun applyFrame(bitmap: Bitmap, color: Int, thickness: Float): Bitmap {
-        val w = bitmap.width
-        val h = bitmap.height
-        val t = (thickness * w / 100f).roundToInt()
-        if (t <= 0) return bitmap
-
-        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val paint = Paint().apply {
-            this.color = color
-            style = Paint.Style.STROKE
-            strokeWidth = t.toFloat()
-        }
-        val halfStroke = t / 2f
-        canvas.drawRect(halfStroke, halfStroke, w - halfStroke, h - halfStroke, paint)
-        return result
-    }
-
-    // === Text Overlay ===
-    fun drawText(bitmap: Bitmap, text: String, x: Float, y: Float,
-                 color: Int = Color.WHITE, size: Float = 48f,
-                 rotation: Float = 0f, bgColor: Int? = null): Bitmap {
-        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val scaledSize = size * bitmap.width / 1080f
-
-        // Background
-        if (bgColor != null) {
-            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.color = bgColor
-                style = Paint.Style.FILL
-            }
-            canvas.save()
-            canvas.rotate(rotation, x * bitmap.width, y * bitmap.height)
-            canvas.drawRect(
-                x * bitmap.width - 16f,
-                y * bitmap.height - scaledSize * 0.7f,
-                x * bitmap.width + text.length * scaledSize * 0.6f + 16f,
-                y * bitmap.height + scaledSize * 0.3f,
-                bgPaint
-            )
-            canvas.restore()
-        }
-
+        val canvas = Canvas(result).apply { rotate(rotation, x, y) }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
-            this.textSize = scaledSize
-            this.isFakeBoldText = true
-            if (bgColor == null) setShadowLayer(4f, 2f, 2f, Color.BLACK)
+            this.textSize = size * bitmap.width / 1080f
+            isFakeBoldText = true
         }
-
-        canvas.save()
-        canvas.rotate(rotation, x * bitmap.width, y * bitmap.height)
-        canvas.drawText(text, x * bitmap.width, y * bitmap.height, paint)
-        canvas.restore()
+        // Background
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(100, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        val bounds = Rect()
+        paint.getTextBounds(text, 0, text.length, bounds)
+        canvas.drawRoundRect(
+            x - 12f, y + bounds.top - 8f,
+            x + bounds.width() + 12f, y + bounds.bottom + 8f,
+            12f, 12f, bgPaint
+        )
+        canvas.drawText(text, x, y, paint)
         return result
     }
 
-    // === Drawing ===
-    fun drawDoodle(bitmap: Bitmap, points: List<Pair<Float, Float>>,
-                   color: Int = Color.RED, strokeWidth: Float = 8f): Bitmap {
+    fun addSticker(bitmap: Bitmap, sticker: Bitmap, x: Float, y: Float, scale: Float = 1.0f): Bitmap {
+        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(result)
+        val s = scale * bitmap.width / 1080f
+        val sw = (sticker.width * s).toInt()
+        val sh = (sticker.height * s).toInt()
+        val scaled = Bitmap.createScaledBitmap(sticker, sw, sh, true)
+        canvas.drawBitmap(scaled, x * bitmap.width - sw / 2f, y * bitmap.height - sh / 2f, null)
+        return result
+    }
+
+    fun drawOnBitmap(bitmap: Bitmap, points: List<Pair<Float, Float>>, color: Int, strokeWidth: Float): Bitmap {
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(result)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             this.strokeWidth = strokeWidth * bitmap.width / 1080f
-            this.style = Paint.Style.STROKE
-            this.strokeCap = Paint.Cap.ROUND
-            this.strokeJoin = Paint.Join.ROUND
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
         }
-
-        if (points.size < 2) return result
-        val path = Path()
-        path.moveTo(points[0].first * bitmap.width, points[0].second * bitmap.height)
-        for (i in 1 until points.size) {
-            path.lineTo(points[i].first * bitmap.width, points[i].second * bitmap.height)
+        if (points.size >= 2) {
+            val path = Path()
+            path.moveTo(points[0].first * bitmap.width, points[0].second * bitmap.height)
+            for (i in 1 until points.size) {
+                path.lineTo(points[i].first * bitmap.width, points[i].second * bitmap.height)
+            }
+            canvas.drawPath(path, paint)
         }
-        canvas.drawPath(path, paint)
         return result
     }
 
-    // === Sticker ===
-    fun drawSticker(bitmap: Bitmap, sticker: Bitmap, x: Float, y: Float, scale: Float = 0.3f): Bitmap {
+    fun saveBitmap(context: Context, bitmap: Bitmap, format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
+                   quality: Int = 95): Uri? {
+        return try {
+            val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+            val file = File(dir, "photo_${System.currentTimeMillis()}.${if (format == Bitmap.CompressFormat.PNG) "png" else "jpg"}")
+            FileOutputStream(file).use { out -> bitmap.compress(format, quality, out) }
+            Uri.fromFile(file)
+        } catch (e: Exception) { null }
+    }
+
+    fun resizeBitmap(bitmap: Bitmap, maxWidth: Int, maxHeight: Int): Bitmap {
+        val (w, h) = bitmap.width to bitmap.height
+        val ratio = minOf(maxWidth.toFloat() / w, maxHeight.toFloat() / h, 1f)
+        if (ratio >= 1f) return bitmap
+        return Bitmap.createScaledBitmap(bitmap, (w * ratio).toInt(), (h * ratio).toInt(), true)
+    }
+
+    fun adjustColorTemperature(bitmap: Bitmap, temperature: Float): Bitmap {
+        val matrix = ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, temperature * 10f,
+            0f, 1f, 0f, 0f, temperature * 5f,
+            0f, 0f, 1f, 0f, temperature * -5f,
+            0f, 0f, 0f, 1f, 0f
+        ))
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-
-        val stickerW = (bitmap.width * scale).roundToInt()
-        val stickerH = (stickerW * sticker.height.toFloat() / sticker.width).roundToInt()
-        val scaledSticker = Bitmap.createScaledBitmap(sticker, stickerW, stickerH, true)
-
-        canvas.drawBitmap(scaledSticker,
-            x * bitmap.width - stickerW / 2f,
-            y * bitmap.height - stickerH / 2f, null)
-        scaledSticker.recycle()
+        Canvas(result).drawBitmap(bitmap, 0f, 0f, Paint().apply {
+            colorFilter = ColorMatrixColorFilter(matrix)
+        })
         return result
     }
 
-    // === Helper ===
-    private fun applyColorMatrix(bitmap: Bitmap, matrix: ColorMatrix): Bitmap {
-        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(matrix) }
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        return result
-    }
-
-    private fun Float.dp(): Float = this * 2f // rough dp conversion for text background padding
+    private const val TAG = "PhotoEditEngine"
 }

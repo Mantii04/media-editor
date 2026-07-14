@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MediaEditor" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#1A1A1A</item>
-        <item name="android:navigationBarColor">#1A1A1A</item>
+    <style name="Theme.MediaEditor" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">#0D0D0D</item>
+        <item name="android:navigationBarColor">#0D0D0D</item>
+        <item name="android:windowBackground">#0D0D0D</item>
+        <item name="android:colorBackground">#0D0D0D</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

@@ -48,12 +48,19 @@ object FileUtils {
     fun saveBitmapToGallery(
         context: Context,
         bitmap: Bitmap,
-        fileName: String = "IMG_${System.currentTimeMillis()}.jpg"
+        fileName: String = "IMG_${System.currentTimeMillis()}.jpg",
+        format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
+        quality: Int = 95
     ): Uri? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val mimeType = when (format) {
+                Bitmap.CompressFormat.PNG -> "image/png"
+                Bitmap.CompressFormat.WEBP -> "image/webp"
+                else -> "image/jpeg"
+            }
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
-                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(MediaStore.Images.Media.MIME_TYPE, mimeType)
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MediaEditor")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
@@ -63,7 +70,7 @@ object FileUtils {
             ) ?: return null
 
             context.contentResolver.openOutputStream(uri)?.use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                bitmap.compress(format, quality, out)
             }
 
             values.clear()
@@ -78,7 +85,7 @@ object FileUtils {
             dir.mkdirs()
             val file = File(dir, fileName)
             FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                bitmap.compress(format, quality, out)
             }
             Uri.fromFile(file)
         }
@@ -129,6 +136,19 @@ object FileUtils {
 
     fun getCacheDir(context: Context): File {
         return File(context.cacheDir, "mediaeditor").also { it.mkdirs() }
+    }
+
+    fun copyUriToCache(context: Context, uri: Uri): File {
+        val file = File(getCacheDir(context), "input_${System.nanoTime()}.tmp")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            file.outputStream().use { output -> input.copyTo(output) }
+        }
+        return file
+    }
+
+    /** Recursively delete cache directory contents */
+    fun clearCache(context: Context) {
+        getCacheDir(context).listFiles()?.forEach { it.deleteRecursively() }
     }
 
     fun getVideoThumbnail(context: Context, uri: Uri, size: Int = 256): Bitmap? {

@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,9 +23,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --info
+        run: ./gradlew assembleDebug --build-cache --parallel
         env:
-          GRADLE_OPTS: -Xmx2048m -XX:+UseParallelGC
+          GRADLE_OPTS: -Xmx4096m -XX:+UseParallelGC -Dorg.gradle.internal.launcher.welcomeMessageEnabled=false
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
