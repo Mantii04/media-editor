@@ -238,13 +238,13 @@ fun VideoEditorScreen(
                 AndroidView(
                     factory = { ctx ->
                         val exoPlayer = player
-                        PlayerView(ctx).apply {
-                            player = exoPlayer
-                            useController = true
-                            setShowNextButton(false)
-                            setShowPreviousButton(false)
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            layoutParams = ViewGroup.LayoutParams(
+                        PlayerView(ctx).also { view ->
+                            view.player = exoPlayer
+                            view.useController = true
+                            view.setShowNextButton(false)
+                            view.setShowPreviousButton(false)
+                            view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            view.layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )

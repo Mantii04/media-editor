@@ -1,6 +1,7 @@
 package com.mediaeditor.editor
 
 import android.graphics.*
+import androidx.compose.ui.unit.dp
 import com.mediaeditor.model.FilterPreset
 import kotlin.math.*
 import kotlin.math.roundToInt
