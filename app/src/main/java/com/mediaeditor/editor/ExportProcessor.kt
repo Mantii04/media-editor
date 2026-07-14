@@ -64,9 +64,9 @@ object ExportProcessor {
             val extractor = MediaExtractor().apply { setDataSource(inputFile.absolutePath) }
 
             val outputMime = if (config.useHEVC) MediaFormat.MIMETYPE_VIDEO_HEVC
-                             else MediaFormat.MIMETYPE_VIDEO_H264
-            val encoder = selectEncoder(outputMime) ?: return@withContext
-                Result.failure(Exception("Encoder not available"))
+                             else MediaFormat.MIMETYPE_VIDEO_AVC
+            val encoder = selectEncoder(outputMime)
+            if (encoder == null) return@withContext Result.failure(Exception("Encoder not available"))
 
             var videoTrackIdx = -1
             var audioTrackIdx = -1

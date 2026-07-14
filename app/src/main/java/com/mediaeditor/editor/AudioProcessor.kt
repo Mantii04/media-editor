@@ -24,7 +24,7 @@ object AudioProcessor {
     fun extractAudioTrack(context: Context, videoUri: Uri, outputDir: File,
                           onProgress: (Float) -> Unit = {}): File? {
         return try {
-            val extractor = MediaExtractor().apply { setDataSource(context, videoUri) }
+            val extractor = MediaExtractor().apply { setDataSource(context, videoUri, null) }
             var audioTrackIdx = -1
             var audioFormat: MediaFormat? = null
 
@@ -73,7 +73,7 @@ object AudioProcessor {
 
     fun adjustVolume(context: Context, inputUri: Uri, outputPath: String, volume: Float): Boolean {
         return try {
-            val extractor = MediaExtractor().apply { setDataSource(context, inputUri) }
+            val extractor = MediaExtractor().apply { setDataSource(context, inputUri, null) }
             var audioTrackIdx = -1
             var audioFormat: MediaFormat? = null
 
@@ -152,8 +152,8 @@ object AudioProcessor {
                  videoVolume: Float = 1.0f, audioVolume: Float = 1.0f): Boolean {
         // Simplified mix - copies audio tracks from both sources
         return try {
-            val videoExtractor = MediaExtractor().apply { setDataSource(context, videoUri) }
-            val audioExtractor = MediaExtractor().apply { setDataSource(context, audioUri) }
+            val videoExtractor = MediaExtractor().apply { setDataSource(context, videoUri, null) }
+            val audioExtractor = MediaExtractor().apply { setDataSource(context, audioUri, null) }
 
             val muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             val trackMap = mutableMapOf<String, Int>()
@@ -195,7 +195,7 @@ object AudioProcessor {
                 while (true) {
                     val sz = videoExtractor.readSampleData(buffer, 0)
                     if (sz < 0) break
-                    info.set(buffer.array(), 0, sz, videoExtractor.sampleTime, videoExtractor.sampleFlags)
+                    info.set(0, sz, videoExtractor.sampleTime, videoExtractor.sampleFlags)
                     muxer.writeSampleData(muxIdx, buffer, info)
                     videoExtractor.advance()
                 }
@@ -214,7 +214,7 @@ object AudioProcessor {
                 while (true) {
                     val sz = audioExtractor.readSampleData(buffer, 0)
                     if (sz < 0) break
-                    info.set(buffer.array(), 0, sz, audioExtractor.sampleTime, audioExtractor.sampleFlags)
+                    info.set(0, sz, audioExtractor.sampleTime, audioExtractor.sampleFlags)
                     muxer.writeSampleData(muxIdx, buffer, info)
                     audioExtractor.advance()
                 }
