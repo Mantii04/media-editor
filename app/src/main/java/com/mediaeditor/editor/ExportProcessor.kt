@@ -2,9 +2,9 @@ package com.mediaeditor.editor
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.MediaExtractor
-import android.graphics.MediaFormat
-import android.graphics.MediaMuxer
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMuxer
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
@@ -105,27 +105,24 @@ object ExportProcessor {
             val buffer = ByteBuffer.allocate(1024 * 1024)
             val info = MediaCodec.BufferInfo()
 
-            for (i in 0 until extractor.trackCount) {
-                val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME) ?: ""
-                val targetIdx = when {
-                    mime.startsWith("video/") -> videoOutputTrack
-                    mime.startsWith("audio/") -> audioOutputTrack
+            // Read all selected tracks in timestamp order
+            extractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+            while (true) {
+                buffer.clear()
+                val sz = extractor.readSampleData(buffer, 0)
+                if (sz < 0) break
+                val trackIndex = extractor.sampleTrackIndex
+                val targetIdx = when (trackIndex) {
+                    videoTrackIdx -> videoOutputTrack
+                    audioTrackIdx -> audioOutputTrack
                     else -> -1
                 }
-                if (targetIdx < 0) continue
-
-                extractor.selectTrack(i)
-                extractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-
-                while (true) {
-                    buffer.clear()
-                    val sz = extractor.readSampleData(buffer, 0)
-                    if (sz < 0) break
+                if (targetIdx >= 0) {
                     info.set(0, sz, extractor.sampleTime, extractor.sampleFlags)
                     muxer.writeSampleData(targetIdx, buffer, info)
-                    extractor.advance()
                 }
-                extractor.unselectTrack(i)
+                extractor.advance()
             }
 
             muxer.stop()

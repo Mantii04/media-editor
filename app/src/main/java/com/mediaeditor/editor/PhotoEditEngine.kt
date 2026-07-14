@@ -132,7 +132,7 @@ object PhotoEditEngine {
                     floatArrayOf(0.6f, 1.0f),
                     Shader.TileMode.CLAMP
                 )
-                xfermode = PorterDuff.Mode.DST_IN
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
             }
             canvas.drawRect(0f, 0f, w, h, paint)
         }
@@ -172,7 +172,7 @@ object PhotoEditEngine {
         }
         // Background
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(100, 0, 0, 0)
+            this.color = Color.argb(100, 0, 0, 0)
             style = Paint.Style.FILL
         }
         val bounds = Rect()
