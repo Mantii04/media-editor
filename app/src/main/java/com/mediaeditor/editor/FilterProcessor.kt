@@ -43,7 +43,7 @@ object FilterProcessor {
             0f, 1.4f, 0f, 0f, -30f,
             0f, 0f, 1.4f, 0f, -30f,
             0f, 0f, 0f, 1f, 0f
-        ))),
+        )),
         FilterPreset("Noir", "Film noir", ColorMatrix().apply {
             setSaturation(0f)
             postConcat(ColorMatrix(floatArrayOf(
