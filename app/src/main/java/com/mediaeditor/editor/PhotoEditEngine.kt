@@ -132,7 +132,7 @@ object PhotoEditEngine {
                     floatArrayOf(0.6f, 1.0f),
                     Shader.TileMode.CLAMP
                 )
-                xfermode = PorterDuff.Mode.DST_IN)
+                xfermode = PorterDuff.Mode.DST_IN
             }
             canvas.drawRect(0f, 0f, w, h, paint)
         }
