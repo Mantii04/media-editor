@@ -2,6 +2,7 @@
 #include <android/bitmap.h>
 #include <android/log.h>
 #include <cmath>
+#include <algorithm>
 
 #define LOG_TAG "ImageEffects"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -26,7 +27,7 @@ Java_com_mediaeditor_ndk_NativeProcessor_nativeHueRotate(
     if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) return JNI_FALSE;
     if (AndroidBitmap_lockPixels(env, bitmap, &pixels) < 0) return JNI_FALSE;
 
-    float angle = degrees * M_PI / 180.0f;
+    float angle = degrees * 3.141592653589793f / 180.0f;
     float cosA = cosf(angle);
     float sinA = sinf(angle);
 

@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <cmath>
+#include <algorithm>
 
 #define LOG_TAG "AudioEffects"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
